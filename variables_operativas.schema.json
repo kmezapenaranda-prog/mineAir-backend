@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mineair.co/contrato/variables_operativas.schema.json",
+  "title": "MineAIr — Variables operativas del turno",
+  "description": "Capturadas por formulario en el aplicativo web y enviadas al servicio ML. Contrato v1.0.",
+  "type": "object",
+  "required": [
+    "schema_v",
+    "fecha",
+    "turno",
+    "frente",
+    "produccion_ton",
+    "produccion_origen",
+    "ventilador_principal_on",
+    "registrado_por"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_v": { "const": "1.0" },
+    "fecha": { "type": "string", "format": "date" },
+    "turno": {
+      "enum": ["manana", "tarde", "noche"],
+      "description": "Sin tilde a propósito, para no pelear con encodings en serial."
+    },
+    "frente": { "type": "string" },
+    "manto": { "type": ["string", "null"] },
+    "produccion_ton": { "type": "number", "minimum": 0 },
+    "produccion_origen": {
+      "enum": ["contada", "estimada"],
+      "description": "contada = suma de nodos contador. estimada = digitada. El modelo NO debe pesarlas igual."
+    },
+    "indice_gasificacion_m3_ton": { "type": ["number", "null"], "minimum": 0 },
+    "ventilador_principal_on": { "type": "boolean" },
+    "caudal_m3_s": { "type": ["number", "null"], "minimum": 0 },
+    "voladuras": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["hora", "cantidad_kg"],
+        "additionalProperties": false,
+        "properties": {
+          "hora": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+          "cantidad_kg": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "observaciones": { "type": ["string", "null"] },
+    "registrado_por": { "type": "string" }
+  }
+}

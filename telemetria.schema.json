@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mineair.co/contrato/telemetria.schema.json",
+  "title": "MineAIr — Telemetría de nodo",
+  "description": "Un paquete por nodo cada 15 s. Contrato v1.0. Campo no aplicable = null, NUNCA 0.",
+  "type": "object",
+  "required": [
+    "schema_v",
+    "node_id",
+    "node_type",
+    "timestamp",
+    "seq",
+    "gases",
+    "ambiente",
+    "estado"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_v": {
+      "const": "1.0",
+      "description": "Receptor que no reconozca esta versión debe rechazar el paquete, no interpretarlo a medias."
+    },
+    "node_id": {
+      "type": "string",
+      "pattern": "^(S[0-9]+|H[0-9]+|R[0-9]+|C[0-9]+|SUP[0-9]+|GW[0-9]+)$"
+    },
+    "node_type": {
+      "enum": ["fijo", "casco", "repetidor", "contador", "superficie"]
+    },
+    "ubicacion": { "type": ["string", "null"] },
+    "frente": { "type": ["string", "null"] },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC con Z. Lo asigna el GATEWAY, no el nodo (el ESP32 no tiene RTC)."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "Contador de paquete del nodo, con wraparound. Usado para dedup en la malla."
+    },
+    "t_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "millis() desde el boot del nodo."
+    },
+    "gases": {
+      "type": "object",
+      "required": ["ch4_pct", "co_ppm", "h2s_ppm", "o2_pct", "co2_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "ch4_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "co_ppm": { "type": ["number", "null"], "minimum": 0 },
+        "h2s_ppm": { "type": ["number", "null"], "minimum": 0 },
+        "o2_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "co2_pct": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "EN PORCENTAJE VOLUMEN, no ppm. Conversión ppm/10000 la hace el firmware."
+        }
+      }
+    },
+    "ambiente": {
+      "type": "object",
+      "required": ["temp_c", "humedad_pct", "presion_hpa"],
+      "additionalProperties": false,
+      "properties": {
+        "temp_c": { "type": ["number", "null"] },
+        "humedad_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "presion_hpa": {
+          "type": ["number", "null"],
+          "minimum": 800,
+          "maximum": 1200,
+          "description": "Solo la reporta el nodo superficie (SUP1). Variable clave del modelo."
+        }
+      }
+    },
+    "conteo": {
+      "type": ["object", "null"],
+      "description": "Solo en node_type=contador. Incremental desde el paquete anterior, NO acumulado.",
+      "required": ["vagonetas"],
+      "additionalProperties": false,
+      "properties": {
+        "vagonetas": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "alarma_local": {
+      "type": ["object", "null"],
+      "description": "Alarma reactiva por umbral, disparada por el ESP32 sin depender de la red.",
+      "required": ["activa", "gases"],
+      "additionalProperties": false,
+      "properties": {
+        "activa": { "type": "boolean" },
+        "gases": {
+          "type": "array",
+          "items": { "enum": ["ch4_pct", "co_ppm", "h2s_ppm", "o2_pct", "co2_pct"] }
+        }
+      }
+    },
+    "estado": {
+      "type": "object",
+      "required": ["bateria_pct", "sensor_ok"],
+      "additionalProperties": false,
+      "properties": {
+        "bateria_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "rssi_dbm": { "type": ["number", "null"] },
+        "snr_db": { "type": ["number", "null"] },
+        "saltos": { "type": ["integer", "null"], "minimum": 0 },
+        "sensor_ok": {
+          "type": "boolean",
+          "description": "false => tratar los gases de este paquete como FALTANTES, no como ceros."
+        },
+        "fw_version": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "node_type": { "const": "contador" } } },
+      "then": {
+        "required": ["conteo"],
+        "properties": { "conteo": { "type": "object" } }
+      }
+    },
+    {
+      "if": { "properties": { "node_type": { "const": "superficie" } } },
+      "then": {
+        "properties": {
+          "ambiente": { "properties": { "presion_hpa": { "type": "number" } } },
+          "gases": {
+            "properties": {
+              "ch4_pct": { "type": "null" },
+              "co_ppm": { "type": "null" },
+              "h2s_ppm": { "type": "null" },
+              "o2_pct": { "type": "null" },
+              "co2_pct": { "type": "null" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

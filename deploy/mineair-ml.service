@@ -1,0 +1,16 @@
+[Unit]
+Description=MineAIr ML - servicio local en el gateway
+After=network.target
+
+[Service]
+Type=simple
+# Ajustar a la ruta real donde se clona/copia el repo en la Pi.
+WorkingDirectory=/home/pi/mineair-ml
+Environment=MINEAIR_CORS_ORIGINS=http://192.168.1.50:5173
+ExecStart=/home/pi/mineair-ml/scripts/servir_pi.sh
+Restart=on-failure
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target

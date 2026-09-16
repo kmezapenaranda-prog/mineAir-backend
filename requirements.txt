@@ -1,0 +1,16 @@
+# Archivo único de dependencias para desarrollo, tests y servicio
+# (PC x86_64 y despliegue Raspberry Pi ARM64).
+# Versiones fijadas contra el entorno validado el 2026-09-12; ver
+# reports/AUDITORIA-2026-09-12.md (A14).
+pandas==3.0.5
+numpy==1.26.0
+scikit-learn==1.9.0
+xgboost==3.2.0
+mealpy==3.0.3
+fastapi==0.140.13
+uvicorn==0.51.0
+jsonschema==4.26.0
+httpx==0.28.1
+matplotlib==3.11.1
+pytest==9.1.1
+pyserial==3.5

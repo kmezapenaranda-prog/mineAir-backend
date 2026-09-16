@@ -1,0 +1,6 @@
+# Sin esto, Windows (core.autocrlf=true) convierte a CRLF al hacer
+# checkout o `git archive` — rompe cualquier script de shell que termine
+# corriendo en la Pi (Linux). Forzar LF en el repo, sin importar el SO
+# donde se clona/exporta.
+* text=auto eol=lf
+*.sh text eol=lf

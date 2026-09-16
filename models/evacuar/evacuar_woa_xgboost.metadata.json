@@ -1,0 +1,223 @@
+{
+  "schema_v": "evacuar-1.0",
+  "objetivo": "evacuar",
+  "features_version": "media5m-v1",
+  "horizonte_ch4_h": 6.0,
+  "horizonte_co_h": 1.0,
+  "umbral_clasificacion": 0.55,
+  "metrica_objetivo": "f2",
+  "features": [
+    "ch4_pct_lag_12h",
+    "ch4_pct_media_5min",
+    "co_ppm",
+    "dia_ano_sin",
+    "presion_hpa",
+    "produccion_ton_h_lag_8h",
+    "ch4_pct_std_30min",
+    "co_ppm_media_30min",
+    "presion_delta_1h",
+    "ch4_pct_lag_1h",
+    "co_ppm_lag_12h",
+    "co_ppm_lag_1h",
+    "co_ppm_lag_6h",
+    "ch4_pct_lag_8h",
+    "produccion_ton_h_lag_1h",
+    "hora_cos",
+    "ch4_pct_lag_30s",
+    "ch4_pct_lag_6h",
+    "resistencia_relativa",
+    "produccion_ton_h",
+    "ch4_pct_lag_4h",
+    "produccion_ton_h_lag_12h",
+    "caudal_delta_15min",
+    "trabajadores",
+    "co_ppm_lag_4h",
+    "ch4_pct_lag_15s",
+    "kg_voladura",
+    "ch4_pct_std_15min",
+    "arranque_mecanico",
+    "hora_sin",
+    "co_ppm_lag_8h",
+    "co_ppm_lag_45s",
+    "co_ppm_lag_30min",
+    "co_ppm_std_5min",
+    "co_ppm_lag_30s"
+  ],
+  "factores_lasso": [
+    {
+      "nombre": "ch4_pct_lag_12h",
+      "peso": -0.6899099406953311
+    },
+    {
+      "nombre": "ch4_pct_media_5min",
+      "peso": 0.5017050885216982
+    },
+    {
+      "nombre": "co_ppm",
+      "peso": -0.33774255013563337
+    },
+    {
+      "nombre": "dia_ano_sin",
+      "peso": -0.32404349306046326
+    },
+    {
+      "nombre": "presion_hpa",
+      "peso": 0.30735006129754294
+    },
+    {
+      "nombre": "produccion_ton_h_lag_8h",
+      "peso": -0.27418006969814673
+    },
+    {
+      "nombre": "ch4_pct_std_30min",
+      "peso": -0.26686986936507195
+    },
+    {
+      "nombre": "co_ppm_media_30min",
+      "peso": -0.2500485288031658
+    },
+    {
+      "nombre": "presion_delta_1h",
+      "peso": -0.23210839947910894
+    },
+    {
+      "nombre": "ch4_pct_lag_1h",
+      "peso": -0.18142890909445822
+    },
+    {
+      "nombre": "co_ppm_lag_12h",
+      "peso": 0.17572207580665508
+    },
+    {
+      "nombre": "co_ppm_lag_1h",
+      "peso": -0.17570610669539657
+    },
+    {
+      "nombre": "co_ppm_lag_6h",
+      "peso": -0.16676453354680357
+    },
+    {
+      "nombre": "ch4_pct_lag_8h",
+      "peso": -0.15887128682536997
+    },
+    {
+      "nombre": "produccion_ton_h_lag_1h",
+      "peso": 0.14906063366306957
+    },
+    {
+      "nombre": "hora_cos",
+      "peso": -0.11907914620700759
+    },
+    {
+      "nombre": "ch4_pct_lag_30s",
+      "peso": 0.11667875141484377
+    },
+    {
+      "nombre": "ch4_pct_lag_6h",
+      "peso": -0.10392186266510063
+    },
+    {
+      "nombre": "resistencia_relativa",
+      "peso": -0.10020132487591298
+    },
+    {
+      "nombre": "produccion_ton_h",
+      "peso": -0.0810258715843038
+    },
+    {
+      "nombre": "ch4_pct_lag_4h",
+      "peso": -0.06884281748459443
+    },
+    {
+      "nombre": "produccion_ton_h_lag_12h",
+      "peso": 0.0661104965599565
+    },
+    {
+      "nombre": "caudal_delta_15min",
+      "peso": -0.05764715001530539
+    },
+    {
+      "nombre": "trabajadores",
+      "peso": 0.05608466368876269
+    },
+    {
+      "nombre": "co_ppm_lag_4h",
+      "peso": -0.05103046836061908
+    },
+    {
+      "nombre": "ch4_pct_lag_15s",
+      "peso": 0.04734497928179222
+    },
+    {
+      "nombre": "kg_voladura",
+      "peso": 0.04725371254905206
+    },
+    {
+      "nombre": "ch4_pct_std_15min",
+      "peso": -0.04657797759908802
+    },
+    {
+      "nombre": "arranque_mecanico",
+      "peso": 0.044947493019882635
+    },
+    {
+      "nombre": "hora_sin",
+      "peso": 0.04278840403506715
+    },
+    {
+      "nombre": "co_ppm_lag_8h",
+      "peso": -0.03713879074576938
+    },
+    {
+      "nombre": "co_ppm_lag_45s",
+      "peso": -0.02832293348636695
+    },
+    {
+      "nombre": "co_ppm_lag_30min",
+      "peso": -0.01785144898226353
+    },
+    {
+      "nombre": "co_ppm_std_5min",
+      "peso": -0.011430090979814685
+    },
+    {
+      "nombre": "co_ppm_lag_30s",
+      "peso": -0.0022494660236458165
+    }
+  ],
+  "hiperparametros": {
+    "max_depth": 3,
+    "learning_rate": 0.03408511690736246,
+    "n_estimators": 228,
+    "subsample": 0.8177187448938769,
+    "colsample_bytree": 0.6359252093149336,
+    "min_child_weight": 9.242319795707486,
+    "gamma": 0.9730555973492204
+  },
+  "seed": 1886,
+  "mina": {
+    "metodo_explotacion": "camara_y_pilares",
+    "frentes_activos": 1,
+    "frentes_sellados": 1,
+    "ancho_seccion_m": 1.8,
+    "alto_seccion_m": 2.0,
+    "espesor_manto_medio_m": 1.1,
+    "espesor_manto_desv_m": 0.12,
+    "trabajadores_por_turno": 20,
+    "turnos_por_dia": 2,
+    "horas_por_turno": 8,
+    "produccion_nominal_persona_ton_h": 1.0,
+    "voladuras_por_turno": 2,
+    "gasificacion_media_m3_ton": 4.0,
+    "gasificacion_desv_m3_ton": 0.45,
+    "caudal_diseno_m3_s": 4.0,
+    "caudal_min_operacional_m3_s": 3.7,
+    "longitud_equivalente_ducto_m": 420.0,
+    "curvas_equivalentes": 6,
+    "altitud_referencia_m": 320.0,
+    "nombre_referencia_barometrica": "Estacion Sardinata IDEAM (320 m s. n. m.)",
+    "area_seccion_m2": 3.6,
+    "diametro_hidraulico_m": 1.8947368421052633,
+    "presion_isa_hpa": 975.3938033915014
+  }
+}

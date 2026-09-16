@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MineAir — Riesgo conjunto experimental",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_v", "objetivo", "node_id", "ubicacion", "probabilidad", "nivel", "recomienda_evacuar", "umbral_clasificacion", "generada_en", "datos_hasta", "experimental", "confianza", "features_faltantes", "factores"],
+  "properties": {
+    "schema_v": {"const": "riesgo-conjunto-1.0"},
+    "objetivo": {"const": "ch4_6h_o_co_1h"},
+    "node_id": {"type": "string"}, "ubicacion": {"type": ["string", "null"]},
+    "probabilidad": {"type": "number", "minimum": 0, "maximum": 1},
+    "nivel": {"enum": ["normal", "atencion", "evacuar"]},
+    "recomienda_evacuar": {"type": "boolean"},
+    "umbral_clasificacion": {"type": "number", "minimum": 0, "maximum": 1},
+    "generada_en": {"type": "string", "format": "date-time"},
+    "datos_hasta": {"type": "string", "format": "date-time"},
+    "experimental": {"const": true}, "confianza": {"enum": ["normal", "reducida"]},
+    "features_faltantes": {"type": "array", "items": {"type": "string"}},
+    "factores": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["nombre", "peso", "valor"],
+      "properties": {"nombre": {"type": "string"}, "peso": {"type": "number", "minimum": 0, "maximum": 1}, "valor": {"type": "string"}}
+    }}
+  },
+  "allOf": [{"if": {"properties": {"nivel": {"const": "evacuar"}}},
+             "then": {"properties": {"recomienda_evacuar": {"const": true}}},
+             "else": {"properties": {"recomienda_evacuar": {"const": false}}}}]
+}

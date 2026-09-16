@@ -1,0 +1,58 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Environment files (keep the documented template)
+.env
+.env.*
+!.env.example
+
+# Test and coverage output
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Local SQLite databases and journal files
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite-*
+*.sqlite3-*
+
+# Logs
+*.log
+logs/
+
+# Generated datasets and application output
+*.parquet
+*.csv
+*.csv.gz
+data/*
+!data/.gitkeep
+reports/
+artifacts/
+outputs/
+
+# Temporary files and directories
+*.tmp
+*.temp
+*.swp
+*.swo
+tmp/
+temp/
