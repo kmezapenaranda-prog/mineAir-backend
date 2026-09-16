@@ -10,16 +10,18 @@ MineAir se despliega como dos servicios independientes:
 
 En `https://railway.com/new` selecciona **Deploy from GitHub repo**, elige
 `mineair-ml` y abre **Settings → Build → Dockerfile path**. Usa
-`deploy/railway/Dockerfile`. En **Variables** añade:
+`deploy/railway/Dockerfile`. Añade un servicio MySQL al proyecto y, en
+**Variables** de la API, referencia su URL:
 
 ```text
-MINEAIR_DB_PATH=/data/estado_servicio.db
+DATABASE_URL=${{MySQL.MYSQL_URL}}
 MINEAIR_INTERNAL_TOKEN=<secreto-largo-y-aleatorio>
 MINEAIR_CORS_ORIGINS=https://<dominio-de-la-web>
 ```
 
-En **Volumes** crea un volumen montado en `/data`. En **Healthcheck** usa
-`/api/estado`. Haz **Generate Domain** y prueba `https://<dominio>/api/estado`.
+No hace falta un volumen para la API: los datos viven en MySQL. En **Healthcheck**
+usa `/api/estado`. Haz **Generate Domain** y prueba
+`https://<dominio>/api/estado`.
 
 El modelo se copia dentro de la imagen. Como `models/**/*.json` está ignorado
 por Git, incluye previamente estos dos archivos en el repositorio:

@@ -26,10 +26,7 @@ class Predictor:
             for identidad, p in ultimas.items():
                 if p['node_type'] == 'superficie':
                     superficie.extend(self.almacen.historial_nodo(identidad) or [])
-            with self.almacen.lock:
-                import json
-                operaciones = [json.loads(f['payload']) for f in self.almacen.conexion.execute(
-                    'SELECT payload FROM variables_operativas ORDER BY registrado_en').fetchall()]
+            operaciones = self.almacen.variables_operativas()
             for identidad, p in ultimas.items():
                 ts = datetime.fromisoformat(p['timestamp'].replace('Z', '+00:00'))
                 if p['node_type'] not in ('fijo', 'casco') or not p['estado']['sensor_ok']:

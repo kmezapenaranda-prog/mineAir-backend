@@ -49,8 +49,13 @@ Desde la raíz del proyecto, instalar dependencias y arrancar una sola instancia
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:DATABASE_URL = "mysql+pymysql://mineair:clave@127.0.0.1:3306/mineair?charset=utf8mb4"
 .\.venv\Scripts\python.exe -m uvicorn src.servicio.api:app --host 127.0.0.1 --port 8000
 ```
+
+La base `mineair` y sus credenciales deben existir antes de arrancar. La API crea
+automáticamente sus tablas vacías al conectarse. No se migran los datos históricos
+de SQLite.
 
 En otra terminal, cerrar el Monitor Serie de Arduino y abrir el puente:
 
@@ -64,9 +69,10 @@ en `gateway_pendientes.db`. Los reintentos HTTP conservan timestamp; los errores
 cambiar COM8 por el dispositivo correspondiente, por ejemplo `/dev/ttyUSB0`.
 La hora del host debe estar sincronizada. No arrancar dos lectores del mismo USB.
 
-La API migra la tabla antigua conservándola como `telemetria_legacy`; no elimina
-el historial. Respaldar `estado_servicio.db` con el servicio detenido antes de
-desplegar una nueva versión. Los tests usan otra base temporal.
+La persistencia de la API usa MySQL mediante `DATABASE_URL`. La cola de reintentos
+del puente USB (`gateway_pendientes.db`) sigue siendo SQLite local porque es un
+componente independiente de la base de datos del backend. Los tests usan una base
+efímera aislada.
 
 `GET /api/nodos` muestra recepción. `GET /api/estado` informa carga real del modelo
 y último ciclo. `GET /api/riesgo-conjunto` entrega un único resultado experimental

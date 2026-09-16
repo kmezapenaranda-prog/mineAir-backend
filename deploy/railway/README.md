@@ -1,8 +1,8 @@
 # API MineAir en Railway
 
 En Railway crea un servicio desde este repositorio y configura el Dockerfile
-como `deploy/railway/Dockerfile`. Define `MINEAIR_DB_PATH=/data/estado_servicio.db`
-y monta un Volume en `/data`; así la telemetría sobrevive a los reinicios.
+como `deploy/railway/Dockerfile`. Añade un servicio MySQL al proyecto y define
+`DATABASE_URL=${{MySQL.MYSQL_URL}}` en la API. No necesitas montar un volumen.
 
 Variables recomendadas:
 

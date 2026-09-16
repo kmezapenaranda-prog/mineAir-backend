@@ -1,5 +1,4 @@
 import json
-import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -9,12 +8,23 @@ from fastapi.testclient import TestClient
 from scripts.recibir_gateway import ColaGateway, decodificar_linea
 from src.data.etiquetas import etiquetar_excedencia
 from src.servicio import api
+from src.servicio.almacen import AlmacenMySQL, normalizar_database_url
 from tests.test_api import _telemetria
+
+
+def _almacen_prueba(ruta, **kwargs):
+    return AlmacenMySQL(f"sqlite+pysqlite:///{ruta.as_posix()}", **kwargs)
+
+
+def test_url_mysql_de_railway_usa_pymysql():
+    assert normalizar_database_url("mysql://usuario:clave@db:3306/mineair") == (
+        "mysql+pymysql://usuario:clave@db:3306/mineair"
+    )
 
 
 def test_reinicios_retransmisiones_wrap_y_retencion(tmp_path):
     ruta = tmp_path / 'estado.db'
-    almacen = api.AlmacenSQLite(ruta, max_paquetes_por_nodo=3)
+    almacen = _almacen_prueba(ruta, max_paquetes_por_nodo=3)
     p = _telemetria(seq=65535); p['t_ms'] = 100000
     assert almacen.guardar_telemetria(p)
     assert not almacen.guardar_telemetria({**p, 'timestamp': '2026-08-24T12:00:02Z'})
@@ -23,32 +33,27 @@ def test_reinicios_retransmisiones_wrap_y_retencion(tmp_path):
     # Reinicio: misma secuencia pero uptime distinto.
     reinicio = {**p, 'seq': 0, 't_ms': 1000, 'timestamp': '2026-08-24T12:00:30Z'}
     assert almacen.guardar_telemetria(reinicio)
-    almacen.conexion.close()
-    almacen = api.AlmacenSQLite(ruta, max_paquetes_por_nodo=3)
+    almacen.close()
+    almacen = _almacen_prueba(ruta, max_paquetes_por_nodo=3)
     assert not almacen.guardar_telemetria(reinicio)
     assert almacen.guardar_telemetria({**reinicio, 'timestamp': '2026-08-24T13:00:30Z'})
     assert len(almacen.historial_nodo('S1')) == 3
-    almacen.conexion.close()
+    almacen.close()
 
 
-def test_migracion_conserva_datos_y_respaldo(tmp_path):
-    ruta = tmp_path / 'vieja.db'
-    con = sqlite3.connect(ruta)
-    con.execute('CREATE TABLE telemetria (node_id TEXT, seq INTEGER, timestamp TEXT, recibido_en TEXT, payload TEXT, PRIMARY KEY(node_id, seq))')
+def test_esquema_persiste_datos_tras_reconexion(tmp_path):
+    ruta = tmp_path / 'persistencia.db'
+    almacen = _almacen_prueba(ruta)
     p = _telemetria()
-    con.execute('INSERT INTO telemetria VALUES (?,?,?,?,?)', ('S1', 1, p['timestamp'], p['timestamp'], json.dumps(p)))
-    con.commit(); con.close()
-    almacen = api.AlmacenSQLite(ruta)
+    assert almacen.guardar_telemetria(p)
+    almacen.close()
+    almacen = _almacen_prueba(ruta)
     assert almacen.historial_nodo('S1') == [p]
-    assert almacen.conexion.execute('SELECT COUNT(*) FROM telemetria_legacy').fetchone()[0] == 1
-    almacen.conexion.close()
-    almacen = api.AlmacenSQLite(ruta)
-    assert len(almacen.historial_nodo('S1')) == 1
-    almacen.conexion.close()
+    almacen.close()
 
 
 def test_casco_falla_y_fechas(tmp_path, monkeypatch):
-    almacen = api.AlmacenSQLite(tmp_path / 'api.db')
+    almacen = _almacen_prueba(tmp_path / 'api.db')
     monkeypatch.setattr(api, 'almacen', almacen)
     cliente = TestClient(api.app)
     p = _telemetria(); p.update(node_id='H1', node_type='casco')
@@ -58,11 +63,11 @@ def test_casco_falla_y_fechas(tmp_path, monkeypatch):
     assert nodo['ultima_lectura']['gases']['co2_pct'] == .08
     assert nodo['proximidad_normativa'] == {}
     assert cliente.get('/api/telemetria/H1', params={'desde':'2026-01-01T00:00:00', 'hasta':'2026-12-01T00:00:00Z'}).status_code == 422
-    almacen.conexion.close()
+    almacen.close()
 
 
 def test_predicciones_caducan_y_no_se_cuentan(tmp_path):
-    almacen = api.AlmacenSQLite(tmp_path / 'p.db')
+    almacen = _almacen_prueba(tmp_path / 'p.db')
     p = dict(schema_v='1.0', node_id='S1', gas='ch4', horizonte_h=6, probabilidad=.1,
              umbral_normativo=1, unidad='pct', sentido='max', nivel='normal', recomienda_evacuar=False,
              confianza='normal', generada_en=datetime.now(timezone.utc).isoformat(),
@@ -73,7 +78,7 @@ def test_predicciones_caducan_y_no_se_cuentan(tmp_path):
         almacen.publicar_prediccion({**p, 'generada_en':fecha.isoformat()})
         assert almacen.predicciones_vigentes() == []
         assert almacen.total_predicciones() == 0
-    almacen.conexion.close()
+    almacen.close()
 
 
 def test_etiquetas_no_inventan_negativos():
@@ -115,7 +120,7 @@ def test_api_a_motor_conjunto_sin_probabilidades_duplicadas(tmp_path, monkeypatc
     from src.servicio.predictor import Predictor
     from src.model.inferencia import MotorInferencia
     from src.data.generador import ConfiguracionGenerador, generar_datos_sinteticos
-    almacen = api.AlmacenSQLite(tmp_path / 'flujo.db')
+    almacen = _almacen_prueba(tmp_path / 'flujo.db')
     monkeypatch.setattr(api, 'almacen', almacen)
     cliente = TestClient(api.app)
     ahora = datetime.now(timezone.utc).replace(microsecond=0)
@@ -137,7 +142,7 @@ def test_api_a_motor_conjunto_sin_probabilidades_duplicadas(tmp_path, monkeypatc
     p['timestamp'] = (ahora + timedelta(seconds=1)).isoformat()
     cliente.post('/api/telemetria', json=p)
     assert cliente.get('/api/riesgo-conjunto').json() == []
-    almacen.conexion.close()
+    almacen.close()
 
 
 def test_motor_con_huecos_presion_ausente_y_calentamiento():
@@ -162,14 +167,14 @@ def test_motor_con_huecos_presion_ausente_y_calentamiento():
 
 
 def test_arranque_api_carga_motor_y_cierra_ciclo(tmp_path, monkeypatch):
-    almacen = api.AlmacenSQLite(tmp_path / 'inicio.db')
+    almacen = _almacen_prueba(tmp_path / 'inicio.db')
     monkeypatch.setattr(api, 'almacen', almacen)
     with TestClient(api.app) as cliente:
         estado = cliente.get('/api/estado').json()
         assert estado['modelo_evacuar_cargado'] == api.predictor.motor.listo
         assert cliente.get('/api/riesgo-conjunto').json() == []
     assert api.predictor is None
-    almacen.conexion.close()
+    almacen.close()
 
 
 def test_particiones_preservan_trayectoria_y_parametros():

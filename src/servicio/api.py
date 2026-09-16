@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import RLock
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Query
@@ -18,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from jsonschema import Draft202012Validator, FormatChecker
 
 from src.config.umbrales import UMBRALES, nivel_proximidad, porcentaje_limite
+from src.servicio.almacen import AlmacenMySQL
 
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -26,7 +25,9 @@ RUTAS_SCHEMA = {
     "variables_operativas": RAIZ / "variables_operativas.schema.json",
     "prediccion": RAIZ / "prediccion.schema.json",
 }
-RUTA_DB = Path(os.environ.get("MINEAIR_DB_PATH", str(RAIZ / "estado_servicio.db")))
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL es obligatorio para iniciar la API.")
 # Frontera de acceso para POST /predicciones (A14 auditoría): sin token
 # configurado, el endpoint queda abierto como antes — aceptable en
 # desarrollo local, no en la Pi expuesta a la red de la mina. Configurar
@@ -123,164 +124,7 @@ def _sanear_telemetria(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-class AlmacenSQLite:
-    """Estado persistente (sobrevive a reinicios) para el servicio offline de la demo."""
-
-    def __init__(self, ruta_db: Path = RUTA_DB, max_paquetes_por_nodo: int = 50_000) -> None:
-        self.max_paquetes_por_nodo = max_paquetes_por_nodo
-        self.lock = RLock()
-        self.conexion = sqlite3.connect(str(ruta_db), check_same_thread=False)
-        self.conexion.row_factory = sqlite3.Row
-        with self.lock, self.conexion:
-            # Migración aditiva: conservar la tabla anterior como respaldo.
-            columnas = self.conexion.execute("PRAGMA table_info(telemetria)").fetchall()
-            migrar = bool(columnas) and not any(c["name"] == "id" for c in columnas)
-            if migrar:
-                self.conexion.execute("BEGIN IMMEDIATE")
-                self.conexion.execute("ALTER TABLE telemetria RENAME TO telemetria_legacy")
-                self.conexion.execute("DROP INDEX IF EXISTS idx_telemetria_node_ts")
-            self.conexion.execute(
-                """CREATE TABLE IF NOT EXISTS telemetria (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    node_id TEXT NOT NULL,
-                    seq INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    recibido_en TEXT NOT NULL,
-                    payload TEXT NOT NULL
-                )"""
-            )
-            if migrar:
-                self.conexion.execute(
-                    "INSERT INTO telemetria (node_id, seq, timestamp, recibido_en, payload) "
-                    "SELECT node_id, seq, timestamp, recibido_en, payload FROM telemetria_legacy"
-                )
-            self.conexion.execute(
-                "CREATE INDEX IF NOT EXISTS idx_telemetria_node_ts ON telemetria (node_id, timestamp)"
-            )
-            self.conexion.execute(
-                """CREATE TABLE IF NOT EXISTS variables_operativas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    registrado_en TEXT NOT NULL,
-                    payload TEXT NOT NULL
-                )"""
-            )
-            self.conexion.execute(
-                """CREATE TABLE IF NOT EXISTS predicciones (
-                    node_id TEXT NOT NULL,
-                    gas TEXT NOT NULL,
-                    horizonte_h INTEGER NOT NULL,
-                    payload TEXT NOT NULL,
-                    PRIMARY KEY (node_id, gas, horizonte_h)
-                )"""
-            )
-
-    def limpiar(self) -> None:
-        with self.lock, self.conexion:
-            self.conexion.execute("DELETE FROM telemetria")
-            self.conexion.execute("DELETE FROM variables_operativas")
-            self.conexion.execute("DELETE FROM predicciones")
-
-    def guardar_telemetria(self, paquete: dict[str, Any]) -> bool:
-        with self.lock, self.conexion:
-            # La trama no incluye boot_id. Limitar deduplicación a 60 s del
-            # timestamp UTC de recepción y comparar también el uptime. Fuera
-            # de esa ventana, reutilizar seq nunca bloquea un nuevo arranque.
-            anteriores = self.conexion.execute(
-                "SELECT timestamp, payload FROM telemetria WHERE node_id = ? AND seq = ? "
-                "AND timestamp >= ? AND timestamp <= ?",
-                (paquete["node_id"], paquete["seq"],
-                 (_utc(paquete["timestamp"]) - timedelta(seconds=60)).isoformat().replace("+00:00", "Z"),
-                 (_utc(paquete["timestamp"]) + timedelta(seconds=60)).isoformat().replace("+00:00", "Z")),
-            ).fetchall()
-            for anterior in anteriores:
-                previo = json.loads(anterior["payload"])
-                if paquete.get("t_ms") is not None:
-                    duplicado = previo.get("t_ms") == paquete["t_ms"]
-                else:
-                    duplicado = anterior["timestamp"] == paquete["timestamp"]
-                if duplicado:
-                    return False
-            cursor = self.conexion.execute(
-                "INSERT INTO telemetria (node_id, seq, timestamp, recibido_en, payload) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (paquete["node_id"], paquete["seq"], paquete["timestamp"], _ahora_iso(), json.dumps(paquete)),
-            )
-            guardado = cursor.rowcount > 0
-            if guardado:
-                self.conexion.execute(
-                    """DELETE FROM telemetria WHERE node_id = ? AND id NOT IN (
-                        SELECT id FROM telemetria WHERE node_id = ? ORDER BY timestamp DESC, id DESC LIMIT ?
-                    )""",
-                    (paquete["node_id"], paquete["node_id"], self.max_paquetes_por_nodo),
-                )
-            return guardado
-
-    def guardar_variable_operativa(self, registro: dict[str, Any]) -> None:
-        with self.lock, self.conexion:
-            self.conexion.execute(
-                "INSERT INTO variables_operativas (registrado_en, payload) VALUES (?, ?)",
-                (registro["registrado_en"], json.dumps(registro)),
-            )
-
-    def publicar_prediccion(self, prediccion: dict[str, Any]) -> None:
-        """Publica una salida del motor solo si cumple el contrato #3."""
-        _validar("prediccion", prediccion)
-        if prediccion["recomienda_evacuar"] != (prediccion["nivel"] == "evacuar"):
-            raise HTTPException(status_code=422, detail="nivel y recomienda_evacuar son inconsistentes.")
-        with self.lock, self.conexion:
-            self.conexion.execute(
-                "INSERT OR REPLACE INTO predicciones (node_id, gas, horizonte_h, payload) VALUES (?, ?, ?, ?)",
-                (prediccion["node_id"], prediccion["gas"], prediccion["horizonte_h"], json.dumps(prediccion)),
-            )
-
-    def ultima_lectura_por_nodo(self) -> dict[str, dict[str, Any]]:
-        with self.lock:
-            filas = self.conexion.execute(
-                """SELECT payload FROM (
-                    SELECT payload, node_id,
-                           ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY timestamp DESC) AS orden
-                    FROM telemetria
-                ) WHERE orden = 1"""
-            ).fetchall()
-        lecturas = (json.loads(fila["payload"]) for fila in filas)
-        return {lectura["node_id"]: lectura for lectura in lecturas}
-
-    def historial_nodo(self, node_id: str) -> list[dict[str, Any]] | None:
-        with self.lock:
-            existe = self.conexion.execute("SELECT 1 FROM telemetria WHERE node_id = ? LIMIT 1", (node_id,)).fetchone()
-            if not existe:
-                return None
-            filas = self.conexion.execute(
-                "SELECT payload FROM telemetria WHERE node_id = ? ORDER BY timestamp ASC", (node_id,)
-            ).fetchall()
-        return [json.loads(fila["payload"]) for fila in filas]
-
-    def predicciones_vigentes(self) -> list[dict[str, Any]]:
-        with self.lock:
-            filas = self.conexion.execute("SELECT payload FROM predicciones").fetchall()
-        ahora = datetime.now(timezone.utc)
-        predicciones = [json.loads(fila["payload"]) for fila in filas]
-        return [p for p in predicciones
-                if timedelta(0) <= ahora - _utc(p["generada_en"]) <= timedelta(minutes=10)]
-
-    def estado_nodos(self) -> tuple[int, list[str], str | None]:
-        """(total de nodos, nodos sin datos hace >60s, timestamp de la última sincronía)."""
-        with self.lock:
-            filas = self.conexion.execute(
-                "SELECT node_id, MAX(recibido_en) AS ultimo FROM telemetria GROUP BY node_id"
-            ).fetchall()
-        if not filas:
-            return 0, [], None
-        ahora = datetime.now(timezone.utc)
-        sin_datos = sorted(fila["node_id"] for fila in filas if ahora - _utc(fila["ultimo"]) > timedelta(seconds=60))
-        ultima_sync = max(fila["ultimo"] for fila in filas)
-        return len(filas), sin_datos, ultima_sync
-
-    def total_predicciones(self) -> int:
-        return len(self.predicciones_vigentes())
-
-
-almacen = AlmacenSQLite()
+almacen = AlmacenMySQL(DATABASE_URL)
 router = APIRouter()
 predictor = None
 
@@ -408,6 +252,9 @@ def obtener_predicciones(
 @router.post("/predicciones", include_in_schema=False, dependencies=[Depends(_verificar_token_interno)])
 def publicar_prediccion(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     """Entrada interna para el motor ML y el simulador de demostración."""
+    _validar("prediccion", payload)
+    if payload["recomienda_evacuar"] != (payload["nivel"] == "evacuar"):
+        raise HTTPException(status_code=422, detail="nivel y recomienda_evacuar son inconsistentes.")
     almacen.publicar_prediccion(payload)
     return {
         "ok": True,

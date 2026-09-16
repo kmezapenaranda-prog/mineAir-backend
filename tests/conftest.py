@@ -2,13 +2,14 @@ import os
 import tempfile
 from pathlib import Path
 
-# Debe fijarse antes de importar src.servicio.api (lee la ruta al importarse),
-# para no compartir base de datos con el servicio real que pueda estar corriendo.
+# Debe fijarse antes de importar src.servicio.api. SQLite se usa únicamente
+# como motor efímero de tests; el servicio desplegado exige una URL MySQL.
 _directorio_tests = tempfile.TemporaryDirectory(prefix="mineair-tests-")
-os.environ["MINEAIR_DB_PATH"] = str(Path(_directorio_tests.name) / "estado.db")
+_ruta_db = (Path(_directorio_tests.name) / "estado.db").as_posix()
+os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{_ruta_db}"
 
 
 def pytest_sessionfinish(session, exitstatus):
     from src.servicio.api import almacen
-    almacen.conexion.close()
+    almacen.close()
     _directorio_tests.cleanup()
