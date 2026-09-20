@@ -21,9 +21,12 @@ def preparar_ventana(paquetes: list[dict], superficie: list[dict], operaciones: 
     datos = datos.set_index('timestamp').sort_index().resample('15s', closed='right', label='right').mean()
     datos = datos.loc[datos.index >= datos.index[-1] - pd.Timedelta(hours=13)]
     datos['presion_hpa'] = np.nan
-    if superficie:
-        presion = pd.DataFrame([{'timestamp':p['timestamp'], 'presion':p['ambiente']['presion_hpa']
-                                 if p['estado']['sensor_ok'] else np.nan} for p in superficie])
+    fuentes_presion = [*paquetes, *superficie]
+    if fuentes_presion:
+        presion = pd.DataFrame([{'timestamp':p['timestamp'], 'presion':p.get('ambiente', {}).get('presion_hpa')
+                                 if p.get('estado', {}).get('sensor_ok') else np.nan} for p in fuentes_presion])
+        presion = presion.dropna(subset=['presion'])
+    if fuentes_presion and not presion.empty:
         presion['timestamp'] = pd.to_datetime(presion.timestamp, utc=True, format='ISO8601')
         fusion = pd.merge_asof(datos.reset_index(), presion.sort_values('timestamp'), on='timestamp',
                               direction='backward', tolerance=pd.Timedelta(seconds=60))

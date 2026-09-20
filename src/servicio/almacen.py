@@ -25,6 +25,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import Engine
 
 
@@ -87,6 +88,13 @@ class AlmacenMySQL:
             Column("horizonte_h", Integer, primary_key=True),
             Column("payload", Text, nullable=False),
         )
+        self.mapas = Table(
+            "mapas",
+            self.metadata,
+            Column("id", String(32), primary_key=True),
+            Column("actualizado_en", String(40), nullable=False),
+            Column("payload", Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        )
         self.metadata.create_all(self.engine)
 
     def limpiar(self) -> None:
@@ -94,6 +102,7 @@ class AlmacenMySQL:
             conexion.execute(delete(self.telemetria))
             conexion.execute(delete(self.variables))
             conexion.execute(delete(self.predicciones))
+            conexion.execute(delete(self.mapas))
 
     def guardar_telemetria(self, paquete: dict[str, Any]) -> bool:
         """Guarda una trama, deduplicando retransmisiones y aplicando retención."""
@@ -237,6 +246,27 @@ class AlmacenMySQL:
 
     def total_predicciones(self) -> int:
         return len(self.predicciones_vigentes())
+
+    def obtener_mapa(self) -> dict[str, Any] | None:
+        with self.lock, self.engine.connect() as conexion:
+            fila = conexion.execute(
+                select(self.mapas.c.payload).where(self.mapas.c.id == "activo")
+            ).first()
+        return json.loads(fila[0]) if fila else None
+
+    def guardar_mapa(self, mapa: dict[str, Any]) -> str:
+        actualizado_en = _ahora_iso()
+        with self.lock, self.engine.begin() as conexion:
+            actualizado = conexion.execute(
+                update(self.mapas)
+                .where(self.mapas.c.id == "activo")
+                .values(actualizado_en=actualizado_en, payload=json.dumps(mapa))
+            )
+            if actualizado.rowcount == 0:
+                conexion.execute(self.mapas.insert().values(
+                    id="activo", actualizado_en=actualizado_en, payload=json.dumps(mapa)
+                ))
+        return actualizado_en
 
     def close(self) -> None:
         self.engine.dispose()

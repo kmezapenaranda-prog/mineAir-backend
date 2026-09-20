@@ -282,6 +282,24 @@ def obtener_estado() -> dict[str, Any]:
     }
 
 
+@router.get("/mapa")
+def obtener_mapa() -> dict[str, Any]:
+    mapa = almacen.obtener_mapa()
+    return {"mapa": mapa, "disponible": mapa is not None}
+
+
+@router.put("/mapa")
+def guardar_mapa(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    if payload.get("tipo") != "mapa-mineair":
+        raise HTTPException(status_code=422, detail="El mapa debe tener tipo 'mapa-mineair'.")
+    if not isinstance(payload.get("elementos"), list):
+        raise HTTPException(status_code=422, detail="El mapa debe contener un arreglo 'elementos'.")
+    if not isinstance(payload.get("nodos"), dict) or not isinstance(payload.get("repetidores"), dict):
+        raise HTTPException(status_code=422, detail="El mapa debe contener 'nodos' y 'repetidores'.")
+    actualizado_en = almacen.guardar_mapa(payload)
+    return {"ok": True, "actualizado_en": actualizado_en, "mapa": payload}
+
+
 app = FastAPI(title="MineAIr ML", version="1.8.0", lifespan=ciclo_vida)
 app.add_middleware(
     CORSMiddleware,
