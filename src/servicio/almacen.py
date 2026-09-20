@@ -95,6 +95,13 @@ class AlmacenMySQL:
             Column("actualizado_en", String(40), nullable=False),
             Column("payload", Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         )
+        self.configuraciones = Table(
+            "configuraciones",
+            self.metadata,
+            Column("id", String(32), primary_key=True),
+            Column("actualizado_en", String(40), nullable=False),
+            Column("payload", Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        )
         self.metadata.create_all(self.engine)
 
     def limpiar(self) -> None:
@@ -103,6 +110,7 @@ class AlmacenMySQL:
             conexion.execute(delete(self.variables))
             conexion.execute(delete(self.predicciones))
             conexion.execute(delete(self.mapas))
+            conexion.execute(delete(self.configuraciones))
 
     def guardar_telemetria(self, paquete: dict[str, Any]) -> bool:
         """Guarda una trama, deduplicando retransmisiones y aplicando retención."""
@@ -267,6 +275,29 @@ class AlmacenMySQL:
                     id="activo", actualizado_en=actualizado_en, payload=json.dumps(mapa)
                 ))
         return actualizado_en
+
+    def obtener_configuracion(self) -> dict[str, Any] | None:
+        with self.lock, self.engine.connect() as conexion:
+            fila = conexion.execute(
+                select(self.configuraciones.c.payload).where(self.configuraciones.c.id == "activa")
+            ).first()
+        return json.loads(fila[0]) if fila else None
+
+    def guardar_configuracion(self, parcial: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        actualizado_en = _ahora_iso()
+        actual = self.obtener_configuracion() or {}
+        configuracion = {**actual, **parcial}
+        with self.lock, self.engine.begin() as conexion:
+            actualizado = conexion.execute(
+                update(self.configuraciones)
+                .where(self.configuraciones.c.id == "activa")
+                .values(actualizado_en=actualizado_en, payload=json.dumps(configuracion))
+            )
+            if actualizado.rowcount == 0:
+                conexion.execute(self.configuraciones.insert().values(
+                    id="activa", actualizado_en=actualizado_en, payload=json.dumps(configuracion)
+                ))
+        return actualizado_en, configuracion
 
     def close(self) -> None:
         self.engine.dispose()

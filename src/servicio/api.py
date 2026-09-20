@@ -300,6 +300,20 @@ def guardar_mapa(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     return {"ok": True, "actualizado_en": actualizado_en, "mapa": payload}
 
 
+@router.get("/configuracion")
+def obtener_configuracion() -> dict[str, Any]:
+    configuracion = almacen.obtener_configuracion()
+    return {"configuracion": configuracion or {}, "disponible": configuracion is not None}
+
+
+@router.put("/configuracion")
+def guardar_configuracion(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    if not payload or not all(isinstance(valor, dict) for valor in payload.values()):
+        raise HTTPException(status_code=422, detail="La configuracion debe contener secciones tipo objeto.")
+    actualizado_en, configuracion = almacen.guardar_configuracion(payload)
+    return {"ok": True, "actualizado_en": actualizado_en, "configuracion": configuracion}
+
+
 app = FastAPI(title="MineAIr ML", version="1.8.0", lifespan=ciclo_vida)
 app.add_middleware(
     CORSMiddleware,
