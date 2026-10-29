@@ -128,10 +128,14 @@ almacen = AlmacenMySQL(DATABASE_URL)
 router = APIRouter()
 predictor = None
 
+# En Vercel (serverless) no hay proceso permanente: el ciclo de inferencia
+# se ejecuta bajo demanda al consultar /riesgo-conjunto o /estado, como
+# máximo una vez cada SEGUNDOS_ENTRE_CICLOS por instancia.
+MODO_SERVERLESS = bool(os.environ.get("VERCEL"))
+SEGUNDOS_ENTRE_CICLOS = 60
 
-@asynccontextmanager
-async def ciclo_vida(app):
-    global predictor
+
+def _crear_predictor():
     from src.model.inferencia import MotorInferencia
     from src.servicio.predictor import Predictor
     try:
@@ -139,7 +143,29 @@ async def ciclo_vida(app):
     except Exception:
         logging.getLogger(__name__).exception('No se pudo cargar el artefacto ML')
         motor = MotorInferencia(RAIZ / 'models' / 'no_disponible')
-    predictor = Predictor(almacen, motor)
+    return Predictor(almacen, motor)
+
+
+def _predictor_bajo_demanda():
+    """En serverless crea el predictor y refresca el ciclo si está vencido."""
+    global predictor
+    if not MODO_SERVERLESS:
+        return predictor
+    if predictor is None:
+        predictor = _crear_predictor()
+    ultimo = predictor.ultimo_ciclo
+    if ultimo is None or datetime.now(timezone.utc) - _utc(ultimo) > timedelta(seconds=SEGUNDOS_ENTRE_CICLOS):
+        predictor.ejecutar()
+    return predictor
+
+
+@asynccontextmanager
+async def ciclo_vida(app):
+    global predictor
+    if MODO_SERVERLESS:
+        yield
+        return
+    predictor = _crear_predictor()
     detener = asyncio.Event()
     async def ejecutar():
         while not detener.is_set():
@@ -159,7 +185,8 @@ async def ciclo_vida(app):
 
 @router.get('/riesgo-conjunto')
 def obtener_riesgo_conjunto() -> list[dict[str, Any]]:
-    return predictor.vigentes() if predictor else []
+    actual = _predictor_bajo_demanda()
+    return actual.vigentes() if actual else []
 
 
 @router.post("/telemetria")
@@ -268,16 +295,17 @@ def publicar_prediccion(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
 @router.get("/estado")
 def obtener_estado() -> dict[str, Any]:
     total_nodos, nodos_sin_datos, ultima_sync = almacen.estado_nodos()
+    actual = _predictor_bajo_demanda()
     return {
         "servicio": "ok",
         "contrato_v": "1.8",
         "ultima_sync": ultima_sync,
         "nodos_activos": total_nodos - len(nodos_sin_datos),
         "nodos_sin_datos": nodos_sin_datos,
-        "modelo_evacuar_cargado": bool(predictor and predictor.motor.listo),
-        "ultimo_ciclo_ml": predictor.ultimo_ciclo if predictor else None,
-        "error_ml": predictor.error if predictor else None,
-        "riesgos_conjuntos_disponibles": len(predictor.vigentes()) if predictor else 0,
+        "modelo_evacuar_cargado": bool(actual and actual.motor.listo),
+        "ultimo_ciclo_ml": actual.ultimo_ciclo if actual else None,
+        "error_ml": actual.error if actual else None,
+        "riesgos_conjuntos_disponibles": len(actual.vigentes()) if actual else 0,
         "predicciones_disponibles": almacen.total_predicciones(),
     }
 

@@ -1,0 +1,13 @@
+data/
+deploy/
+scripts/
+test/
+tests/
+*.db
+*.png
+*.jpg
+*.jpeg
+*.md
+.env
+.env.*
+__pycache__/

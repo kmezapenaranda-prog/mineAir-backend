@@ -1,18 +1,19 @@
-# Archivo único de dependencias para desarrollo, tests y servicio
-# (PC x86_64 y despliegue Raspberry Pi ARM64).
+# Dependencias de ejecución del servicio (Raspberry Pi ARM64, PC y Vercel).
+# Entrenamiento y tests: pip install -r requirements-dev.txt
 # Versiones fijadas contra el entorno validado el 2026-09-12; ver
 # reports/AUDITORIA-2026-09-12.md (A14).
 pandas==3.0.5
 numpy==1.26.0
 scikit-learn==1.9.0
-xgboost==3.2.0
-mealpy==3.0.3
+# En Linux x86_64 (Vercel) el paquete xgboost arrastra ~200 MB de NCCL/CUDA;
+# xgboost-cpu es la misma librería sin GPU y cabe en el límite de Vercel.
+xgboost==3.2.0; sys_platform != "linux" or platform_machine != "x86_64"
+xgboost-cpu==3.2.0; sys_platform == "linux" and platform_machine == "x86_64"
 fastapi==0.140.13
 uvicorn==0.51.0
 jsonschema==4.26.0
 httpx==0.28.1
-matplotlib==3.11.1
-pytest==9.1.1
 pyserial==3.5
 SQLAlchemy==2.0.43
 PyMySQL==1.1.2
+psycopg[binary]==3.2.10

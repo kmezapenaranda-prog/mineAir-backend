@@ -30,12 +30,15 @@ from sqlalchemy.engine import Engine
 
 
 def normalizar_database_url(database_url: str) -> str:
-    """Normaliza el alias de MySQL que Railway puede entregar."""
+    """Normaliza las URLs MySQL/Postgres que entregan los proveedores (Railway, Neon/Vercel)."""
     if not database_url or not database_url.strip():
         raise ValueError("DATABASE_URL es obligatorio para la persistencia de la API.")
     database_url = database_url.strip()
     if database_url.startswith("mysql://"):
         return "mysql+pymysql://" + database_url[len("mysql://") :]
+    for prefijo in ("postgres://", "postgresql://"):
+        if database_url.startswith(prefijo):
+            return "postgresql+psycopg://" + database_url[len(prefijo) :]
     return database_url
 
 

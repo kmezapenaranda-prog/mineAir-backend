@@ -201,3 +201,8 @@ def _comprobar_reenvio(ruta, p):
         cola.enviar(c, 'http://test/api/telemetria')
     assert cola.db.execute('SELECT error FROM pendientes').fetchone()[0] == 'incompatible'
     cola.db.close()
+
+
+def test_url_postgres_de_vercel_usa_psycopg():
+    for url in ("postgres://u:c@host/db?sslmode=require", "postgresql://u:c@host/db?sslmode=require"):
+        assert normalizar_database_url(url) == "postgresql+psycopg://u:c@host/db?sslmode=require"
