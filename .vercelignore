@@ -1,8 +1,8 @@
-data/
-deploy/
-scripts/
-test/
-tests/
+/data/
+/deploy/
+/scripts/
+/test/
+/tests/
 *.db
 *.png
 *.jpg
@@ -11,7 +11,7 @@ tests/
 .env
 .env.*
 __pycache__/
-.agents/
-.claude/
+/.agents/
+/.claude/
 skills-lock.json
-.vercel/
+/.vercel/
