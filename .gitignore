@@ -56,3 +56,6 @@ outputs/
 *.swo
 tmp/
 temp/
+
+.vercel
+.env*
